@@ -1,9 +1,9 @@
 # Nuke built-in rules and variables.
 override MAKEFLAGS += -rR
 
-override IMAGE_NAME := barebones
+override IMAGE_NAME := haydos
 
-.PHONY: all
+.PHONY: iso
 all: $(IMAGE_NAME).iso
 
 .PHONY: all-hdd

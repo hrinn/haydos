@@ -1,11 +1,15 @@
 [package]
-name = "limine-rust-barebones"
+name = "haydos"
 version = "0.1.0"
 edition = "2021"
+authors = ["Hayden Rinn <hayden@haydenrinn.com>"]
 
 [dependencies]
 limine = "0.1"
 spin = "0.9"
 
 [profile.dev]
-opt-level = 3
+panic = "abort"
+
+[profile.release]
+panic = "abort"
