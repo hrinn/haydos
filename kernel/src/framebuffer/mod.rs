@@ -2,6 +2,15 @@ use lazy_static::lazy_static;
 use limine::{LimineFramebuffer, LimineFramebufferRequest};
 use spin::Mutex;
 
+#[derive(Debug, Clone, Copy)]
+#[repr(u32)]
+pub enum Color {
+    White = 0xFFFFFFFF,
+    Black = 0xFF000000,
+    DarkViolet = 0xFF494368,
+    Alabaster = 0xFFEEF0EB,
+}
+
 struct Framebuffer {
     cursor: u64,
     buffer: &'static LimineFramebuffer,
@@ -28,35 +37,81 @@ lazy_static! {
     });
 }
 
-pub fn fill_screen() {
+fn fill_screen(color: Color) {
     let framebuffer = FRAMEBUFFER.lock();
 
-    for i in 0..framebuffer.buffer.pitch * framebuffer.buffer.height as usize {
+    for i in (0..((framebuffer.buffer.pitch * framebuffer.buffer.height) as usize)).step_by(4) {
         unsafe {
             *(framebuffer
                 .buffer
                 .address
                 .as_ptr()
                 .unwrap()
-                .offset(i * 4 as isize) as *mut u32) = 0xFFFFFFFF;
+                .offset(i as isize) as *mut u32) = color as u32;
+        }
+    }
+}
+
+fn draw_border(color: Color) {
+    let framebuffer = FRAMEBUFFER.lock();
+
+    // Top line
+    for i in (64..(framebuffer.buffer.pitch - 64) as usize).step_by(4) {
+        for j in 0..4 {
+            let offset = i + (framebuffer.buffer.pitch as usize) * (16 + j);
+            
+            unsafe {
+                *(framebuffer
+                    .buffer
+                    .address
+                    .as_ptr()
+                    .unwrap()
+                    .offset(offset as isize) as *mut u32) = color as u32;
+            }
         }
     }
 
-    // for i in 0..framebuffer.buffer.height as usize {
-    //     // Calculate the pixel offset using the framebuffer information we obtained above.
-    //     // We skip `i` scanlines (pitch is provided in bytes) and add `i * 4` to skip `i` pixels forward.
-    //     let pixel_offset = i * framebuffer.buffer.pitch as usize + i * 4;
+    // Bottom line
+    for i in (64..(framebuffer.buffer.pitch - 64) as usize).step_by(4) {
+        for j in 0..4 {
+            let offset = i + (framebuffer.buffer.pitch as usize) * ((framebuffer.buffer.height as usize) - j - 16);
+            
+            unsafe {
+                *(framebuffer
+                    .buffer
+                    .address
+                    .as_ptr()
+                    .unwrap()
+                    .offset(offset as isize) as *mut u32) = color as u32;
+            }
+        }
+    }
 
-    //     // Write 0xFFFFFFFF to the provided pixel offset to fill it white.
-    //     // We can safely unwrap the result of `as_ptr()` because the framebuffer address is
-    //     // guaranteed to be provided by the bootloader.
-    //     unsafe {
-    //         *(framebuffer
-    //             .buffer
-    //             .address
-    //             .as_ptr()
-    //             .unwrap()
-    //             .offset(pixel_offset as isize) as *mut u32) = 0xFFFFFFFF;
-    //     }
-    // }
+    // Left line
+    // Bottom line
+    for i in (16..(framebuffer.buffer.height - 16) as usize).step_by(4) {
+        for j in 0..4 {
+            let offset = (i * (framebuffer.buffer.pitch as usize)) + (16 + j);
+            
+            unsafe {
+                *(framebuffer
+                    .buffer
+                    .address
+                    .as_ptr()
+                    .unwrap()
+                    .offset(offset as isize) as *mut u32) = color as u32;
+            }
+        }
+    }
+
+    // Right line
+
+}
+
+static HELLO: &[u8] = b"Hello World!";
+
+pub fn setup_terminal() {
+    fill_screen(Color::Black);
+
+    draw_border(Color::Alabaster);
 }

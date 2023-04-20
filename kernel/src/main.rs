@@ -6,11 +6,13 @@ mod framebuffer;
 use core::arch::asm;
 use core::panic::PanicInfo;
 
+use framebuffer::Color;
+
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
-    framebuffer::fill_screen();
+    framebuffer::setup_terminal();
 
-    loop {}
+    hcf();
 }
 
 #[panic_handler]
