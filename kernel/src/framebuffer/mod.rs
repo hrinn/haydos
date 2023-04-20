@@ -1,6 +1,7 @@
 mod font;
 
 use core::ptr::copy;
+use core::fmt;
 use font::FONT;
 use lazy_static::lazy_static;
 use limine::{LimineFramebuffer, LimineFramebufferRequest};
@@ -112,6 +113,13 @@ impl Writer {
     }
 }
 
+impl fmt::Write for Writer {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        self.write_string(s);
+        Ok(())
+    }
+}
+
 static FRAMEBUFFER_REQUEST: LimineFramebufferRequest = LimineFramebufferRequest::new(0);
 
 lazy_static! {
@@ -134,7 +142,19 @@ pub fn draw_background() {
     writer.fill_to_end();
 }
 
-pub fn putc(c: char) {
-    let mut writer = WRITER.lock();
-    writer.putc(c);
+#[macro_export]
+macro_rules! print {
+    ($($arg:tt)*) => ($crate::framebuffer::_print(format_args!($($arg)*)));
+}
+
+#[macro_export]
+macro_rules! println {
+    () => ($crate::print!("\n"));
+    ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
+}
+
+#[doc(hidden)]
+pub fn _print(args: fmt::Arguments) {
+    use core::fmt::Write;
+    WRITER.lock().write_fmt(args).unwrap();
 }
