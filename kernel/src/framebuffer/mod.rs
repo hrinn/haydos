@@ -1,117 +1,140 @@
+mod font;
+
+use core::ptr::copy;
+use font::FONT;
 use lazy_static::lazy_static;
 use limine::{LimineFramebuffer, LimineFramebufferRequest};
 use spin::Mutex;
 
 #[derive(Debug, Clone, Copy)]
 #[repr(u32)]
-pub enum Color {
+enum Color {
     White = 0xFFFFFFFF,
-    Black = 0xFF000000,
-    DarkViolet = 0xFF494368,
-    Alabaster = 0xFFEEF0EB,
+    // Black = 0xFF000000,
+    Purple = 0xFF541B54,
 }
 
-struct Framebuffer {
+pub struct Writer {
     cursor: u64,
+    background: Color,
+    foreground: Color,
     buffer: &'static LimineFramebuffer,
 }
 
-impl Framebuffer {
-    unsafe fn putc(&mut self, c: char) {
+impl Writer {
+    pub fn write_string(&mut self, s: &str) {
+        for c in s.chars() {
+            self.write_char(c);
+        }
+    }
 
+    pub fn write_char(&mut self, c: char) {
+        if !c.is_ascii() {
+            panic!();
+        }
+
+        // Handle special chars
+        if c == '\n' {
+            self.cursor -= self.cursor % self.buffer.pitch;
+            self.cursor += self.buffer.pitch * 16;
+            return;
+        }
+
+        // Get offset of first char byte in the bitmap
+        let bitmap_base = (((c as u8) - 0x20) as usize) * 16;
+
+        // Write each row
+        for row in 0..16 as u64 {
+            let bitmap = FONT[bitmap_base + row as usize];
+
+            // Write each bit of the row
+            for col in 0..8 as u64 {
+                let color = if bitmap & 0x80 >> col == 0 {
+                    self.background
+                } else {
+                    self.foreground
+                };
+
+                let bytes_offset = self.cursor + (col * 4) + (row * self.buffer.pitch);
+
+                unsafe {
+                    self.write_pixel(bytes_offset.try_into().unwrap(), color);
+                }
+            }
+        }
+
+        // Iterate cursor
+        self.cursor += 32;
+
+        // Check if we are at the end of the line
+        if self.cursor % self.buffer.pitch == 0 {
+            // Check if we have filled the screen
+            if self.cursor == self.buffer.pitch * self.buffer.height {
+                // Scroll screen
+                unsafe {
+                    copy(
+                        self.buffer
+                            .address
+                            .as_ptr()
+                            .unwrap()
+                            .add((self.buffer.pitch * 16) as usize),
+                        self.buffer.address.as_ptr().unwrap(),
+                        self.buffer.size() - (self.buffer.pitch as usize) * 16,
+                    );
+                }
+
+                // Set cursor to last line
+                self.cursor = self.buffer.size() as u64 - (self.buffer.pitch) * 16;
+
+                // Wipe last line
+                self.fill_to_end();
+            } else {
+                // Go to beginning of next line
+                self.cursor += self.buffer.pitch * 16;
+            }
+        }
+    }
+
+    fn fill_to_end(&mut self) {
+        for i in (self.cursor as usize..self.buffer.size()).step_by(4) {
+            unsafe { self.write_pixel(i, self.background) }
+        }
+    }
+
+    #[inline]
+    unsafe fn write_pixel(&mut self, bytes_offset: usize, color: Color) {
+        *(self
+            .buffer
+            .address
+            .as_ptr()
+            .unwrap()
+            .offset(bytes_offset as isize) as *mut u32) = color as u32;
     }
 }
 
 static FRAMEBUFFER_REQUEST: LimineFramebufferRequest = LimineFramebufferRequest::new(0);
 
 lazy_static! {
-    static ref FRAMEBUFFER: Mutex<Framebuffer> = Mutex::new(Framebuffer {
+    pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
         cursor: 0,
+        background: Color::Purple,
+        foreground: Color::White,
         buffer: FRAMEBUFFER_REQUEST
             .get_response()
             .get()
-            .expect("limine: No framebuffer response")
+            .expect("limine: Framebuffer response should be present")
             .framebuffers()
             .first()
-            .expect("No framebuffers"),
+            .expect("limine: There should be at least 1 framebuffer"),
     });
 }
 
-fn fill_screen(color: Color) {
-    let framebuffer = FRAMEBUFFER.lock();
-
-    for i in (0..((framebuffer.buffer.pitch * framebuffer.buffer.height) as usize)).step_by(4) {
-        unsafe {
-            *(framebuffer
-                .buffer
-                .address
-                .as_ptr()
-                .unwrap()
-                .offset(i as isize) as *mut u32) = color as u32;
-        }
-    }
+pub fn draw_background() {
+    let mut writer = WRITER.lock();
+    writer.fill_to_end();
 }
 
-fn draw_border(color: Color) {
-    let framebuffer = FRAMEBUFFER.lock();
-
-    // Top line
-    for i in (64..(framebuffer.buffer.pitch - 64) as usize).step_by(4) {
-        for j in 0..4 {
-            let offset = i + (framebuffer.buffer.pitch as usize) * (16 + j);
-            
-            unsafe {
-                *(framebuffer
-                    .buffer
-                    .address
-                    .as_ptr()
-                    .unwrap()
-                    .offset(offset as isize) as *mut u32) = color as u32;
-            }
-        }
-    }
-
-    // Bottom line
-    for i in (64..(framebuffer.buffer.pitch - 64) as usize).step_by(4) {
-        for j in 0..4 {
-            let offset = i + (framebuffer.buffer.pitch as usize) * ((framebuffer.buffer.height as usize) - j - 16);
-            
-            unsafe {
-                *(framebuffer
-                    .buffer
-                    .address
-                    .as_ptr()
-                    .unwrap()
-                    .offset(offset as isize) as *mut u32) = color as u32;
-            }
-        }
-    }
-
-    // Left line
-    // Bottom line
-    for i in (16..(framebuffer.buffer.height - 16) as usize).step_by(4) {
-        for j in 0..4 {
-            let offset = (i * (framebuffer.buffer.pitch as usize)) + (16 + j);
-            
-            unsafe {
-                *(framebuffer
-                    .buffer
-                    .address
-                    .as_ptr()
-                    .unwrap()
-                    .offset(offset as isize) as *mut u32) = color as u32;
-            }
-        }
-    }
-
-    // Right line
-
-}
-
-static HELLO: &[u8] = b"Hello World!";
-
-pub fn setup_terminal() {
-    fill_screen(Color::Black);
-
-    draw_border(Color::Alabaster);
+pub fn putc(c: char) {
+    let mut writer = WRITER.lock();
+    writer.putc(c);
 }
