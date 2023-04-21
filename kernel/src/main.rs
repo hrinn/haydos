@@ -2,9 +2,14 @@
 #![no_main]
 
 mod framebuffer;
+mod limine_module;
 
 use core::arch::asm;
 use core::panic::PanicInfo;
+
+use limine::LimineBootInfoRequest;
+
+static BOOTLOADER_INFO: LimineBootInfoRequest = LimineBootInfoRequest::new(0);
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
@@ -13,11 +18,23 @@ pub extern "C" fn _start() -> ! {
     println!("HAYDOS");
     println!("v{}", 0.1);
 
+    let bootloader_info = BOOTLOADER_INFO
+        .get_response()
+        .get()
+        .expect("limine: bootloader info response should not be empty");
+
+    println!(
+        "bootloader: {} v{}",
+        bootloader_info.name.to_str().unwrap().to_str().unwrap(),
+        bootloader_info.version.to_str().unwrap().to_str().unwrap()
+    );
+
     hcf();
 }
 
 #[panic_handler]
-fn panic(_info: &PanicInfo) -> ! {
+fn panic(info: &PanicInfo) -> ! {
+    println!("{}", info);
     hcf();
 }
 

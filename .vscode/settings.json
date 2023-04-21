@@ -1,6 +1,7 @@
 {
     "rust-analyzer.checkOnSave.allTargets": false,
     "rust-analyzer.linkedProjects": [
-        "kernel/Cargo.toml"
+        "./kernel/Cargo.toml",
+        "./kernel/Cargo.toml"
     ],
 }
