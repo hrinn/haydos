@@ -13,17 +13,21 @@ use spin::Mutex;
 enum Color {
     White = 0xFFFFFFFF,
     // Black = 0xFF000000,
-    Purple = 0xFF541B54,
+    Purple = 0xFF22223B,
 }
 
 pub struct Writer {
-    cursor: u64,
+    cursor: usize,
     background: Color,
     foreground: Color,
     buffer: &'static LimineFramebuffer,
 }
 
 impl Writer {
+    pub fn buffer_pitch(&self) -> usize {
+        self.buffer.pitch.try_into().unwrap()
+    }
+
     pub fn write_string(&mut self, s: &str) {
         for c in s.chars() {
             self.write_char(c);
@@ -37,8 +41,7 @@ impl Writer {
 
         // Handle special chars
         if c == '\n' {
-            self.cursor -= self.cursor % self.buffer.pitch;
-            self.cursor += self.buffer.pitch * 16;
+            self.new_line();
             return;
         }
 
@@ -46,21 +49,21 @@ impl Writer {
         let bitmap_base = (((c as u8) - 0x20) as usize) * 16;
 
         // Write each row
-        for row in 0..16 as u64 {
-            let bitmap = FONT[bitmap_base + row as usize];
+        for row in 0..16 {
+            let bitmap = FONT[bitmap_base + row];
 
             // Write each bit of the row
-            for col in 0..8 as u64 {
+            for col in 0..8 {
                 let color = if bitmap & 0x80 >> col == 0 {
                     self.background
                 } else {
                     self.foreground
                 };
 
-                let bytes_offset = self.cursor + (col * 4) + (row * self.buffer.pitch);
+                let bytes_offset = self.cursor + (col * 4) + (row * self.buffer_pitch());
 
                 unsafe {
-                    self.write_pixel(bytes_offset.try_into().unwrap(), color as u32);
+                    self.write_pixel(bytes_offset, color as u32);
                 }
             }
         }
@@ -69,36 +72,43 @@ impl Writer {
         self.cursor += 32;
 
         // Check if we are at the end of the line
-        if self.cursor % self.buffer.pitch == 0 {
-            // Check if we have filled the screen
-            if self.cursor == self.buffer.pitch * self.buffer.height {
-                // Scroll screen
-                unsafe {
-                    copy(
-                        self.buffer
-                            .address
-                            .as_ptr()
-                            .unwrap()
-                            .add((self.buffer.pitch * 16) as usize),
-                        self.buffer.address.as_ptr().unwrap(),
-                        self.buffer.size() - (self.buffer.pitch as usize) * 16,
-                    );
-                }
-
-                // Set cursor to last line
-                self.cursor = self.buffer.size() as u64 - (self.buffer.pitch) * 16;
-
-                // Wipe last line
-                self.fill_to_end();
+        if self.cursor % self.buffer_pitch() == 0 {
+            if self.cursor == self.buffer.size() {
+                self.scroll();
             } else {
-                // Go to beginning of next line
-                self.cursor += self.buffer.pitch * 16;
+                self.new_line();
             }
         }
     }
 
+    fn scroll(&mut self) {
+        // Copy lines (1..n) to lines (0..n-1)
+        unsafe {
+            copy(
+                self.buffer
+                    .address
+                    .as_ptr()
+                    .unwrap()
+                    .add(self.buffer_pitch() * 16),
+                self.buffer.address.as_ptr().unwrap(),
+                self.buffer.size() - self.buffer_pitch() * 16,
+            );
+        }
+
+        // Set cursor to last line
+        self.cursor = self.buffer.size() - (self.buffer_pitch()) * 16;
+
+        // Wipe last line
+        self.fill_to_end();
+    }
+
+    fn new_line(&mut self) {
+        self.cursor -= self.cursor % self.buffer_pitch();
+        self.cursor += self.buffer_pitch() * 16;
+    }
+
     fn fill_to_end(&mut self) {
-        for i in (self.cursor as usize..self.buffer.size()).step_by(4) {
+        for i in (self.cursor..self.buffer.size()).step_by(4) {
             unsafe { self.write_pixel(i, self.background as u32) }
         }
     }
