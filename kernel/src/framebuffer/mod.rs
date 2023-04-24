@@ -4,10 +4,9 @@ use core::fmt;
 use core::ptr::copy;
 use font::FONT;
 use lazy_static::lazy_static;
-use limine::{LimineFile, LimineFramebuffer, LimineFramebufferRequest};
+use limine::{LimineFramebuffer, LimineFramebufferRequest};
 use spin::Mutex;
 
-use crate::limine_module;
 
 #[derive(Debug, Clone, Copy)]
 #[repr(u32)]
@@ -104,34 +103,6 @@ impl Writer {
         }
     }
 
-    unsafe fn draw_bmp(&mut self, bmp: &LimineFile) {
-        let bmp_base = bmp.base.as_ptr().unwrap();
-
-        let img_data_offset = bmp_base.offset(0xA).read() as u32;
-        let img_base = bmp_base.add(img_data_offset as usize);
-
-        let width = bmp_base.offset(0x12).read() as u16;
-        let height = bmp_base.offset(0x16).read() as u16;
-
-        let mut fb_offset = 0;
-
-        for b in (0..(width * height) as isize).step_by(4) {
-            let mut bytes: [u8; 4] = [0xFF, 0, 0, 0];
-
-            bytes[1] = *img_base.offset(b);
-            bytes[1] = *img_base.offset(b + 1);
-            bytes[1] = *img_base.offset(b + 2);
-
-            self.write_pixel(fb_offset, u32::from_be_bytes(bytes));
-
-            fb_offset += 4;
-
-            if fb_offset % width as usize == 0 {
-                fb_offset += self.buffer.pitch as usize - (fb_offset % self.buffer.pitch as usize);
-            }
-        }
-    }
-
     #[inline]
     unsafe fn write_pixel(&mut self, bytes_offset: usize, color: u32) {
         *(self
@@ -170,12 +141,6 @@ lazy_static! {
 pub fn draw_background() {
     let mut writer = WRITER.lock();
     writer.fill_to_end();
-
-    // Draw bmp
-    let bmp = limine_module::get_module("/hayden.bmp").expect("/hayden.bmp module not found");
-    unsafe {
-        writer.draw_bmp(bmp);
-    }
 }
 
 #[macro_export]

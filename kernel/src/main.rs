@@ -2,7 +2,6 @@
 #![no_main]
 
 mod framebuffer;
-mod limine_module;
 
 use core::arch::asm;
 use core::panic::PanicInfo;
