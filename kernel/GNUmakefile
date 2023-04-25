@@ -9,7 +9,7 @@ all:
 
 .PHONY: check
 check:
-	cargo check
+	cargo check --target x86_64-unknown-none
 
 .PHONY: format
 fmt:

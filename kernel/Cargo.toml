@@ -8,6 +8,7 @@ authors = ["Hayden Rinn <hayden@haydenrinn.com>"]
 limine = "0.1"
 spin = "0.9"
 lazy_static = { version = "1.4", features = ["spin_no_std"] }
+cfg-if = "1"
 
 [profile.dev]
 panic = "abort"
