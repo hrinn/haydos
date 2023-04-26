@@ -1,11 +1,13 @@
 #![no_std]
 #![no_main]
+#![feature(abi_x86_interrupt)]
 
-mod framebuffer;
 mod arch;
+mod framebuffer;
+mod interrupts;
 
+use arch::BaseSupport;
 use core::panic::PanicInfo;
-use crate::arch::KernelSupport;
 use limine::LimineBootInfoRequest;
 
 static BOOTLOADER_INFO: LimineBootInfoRequest = LimineBootInfoRequest::new(0);
@@ -27,6 +29,8 @@ pub extern "C" fn _start() -> ! {
         bootloader_info.name.to_str().unwrap().to_str().unwrap(),
         bootloader_info.version.to_str().unwrap().to_str().unwrap()
     );
+
+    interrupts::init();
 
     arch::Target::hcf();
 }

@@ -7,7 +7,6 @@ use lazy_static::lazy_static;
 use limine::{LimineFramebuffer, LimineFramebufferRequest};
 use spin::Mutex;
 
-
 #[derive(Debug, Clone, Copy)]
 #[repr(u32)]
 enum Color {
